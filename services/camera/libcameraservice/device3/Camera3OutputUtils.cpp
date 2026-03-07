@@ -1287,11 +1287,9 @@ void notifyShutter(CaptureOutputStates& states, const camera_shutter_msg_t &msg)
                     states.nextZslShutterFrameNum = msg.frame_number + 1;
                 } else {
                     if (msg.frame_number < states.nextShutterFrameNum) {
-                        SET_ERR(CAMERA_HAL_CALLBACK_ERROR,
-                            "Shutter notification out-of-order. Expected "
+                        ALOGW("Shutter notification out-of-order. Expected "
                                 "notification for frame %d, got frame %d",
                                 states.nextShutterFrameNum, msg.frame_number);
-                        return;
                     }
                     states.nextShutterFrameNum = msg.frame_number + 1;
                 }
