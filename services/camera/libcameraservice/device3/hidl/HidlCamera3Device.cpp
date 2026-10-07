@@ -1209,6 +1209,24 @@ status_t HidlCamera3Device::HidlHalInterface::configureStreams(
             dstStream->setDataSpaceOverride(needDataspaceOverride);
             dst->format = overrideFormat;
             dst->data_space = overrideDataSpace;
+
+            // QTI HALs produce HDR10 (PQ) video for 10-bit encoder streams, but the
+            // encoder surface defaults to BT.2020 SDR, so the recording gets tagged
+            // with the wrong transfer. Tag such streams as BT.2020 PQ instead.
+            static constexpr uint64_t kUsageVideoEncoder = 1ULL << 16;
+            static constexpr uint64_t kUsageQtiPrivate10Bit = 1ULL << 30;
+            const uint64_t usage = requestedConfiguration3_2.streams[i].usage;
+            if (dst->stream_type == CAMERA_STREAM_OUTPUT &&
+                    (usage & kUsageVideoEncoder) && (usage & kUsageQtiPrivate10Bit) &&
+                    (dst->data_space & HAL_DATASPACE_STANDARD_MASK) ==
+                            HAL_DATASPACE_STANDARD_BT2020 &&
+                    (dst->data_space & HAL_DATASPACE_TRANSFER_MASK) ==
+                            HAL_DATASPACE_TRANSFER_SMPTE_170M) {
+                ALOGI("%s: Stream %d: tagging 10-bit video stream as BT2020 PQ", __FUNCTION__,
+                        streamId);
+                dstStream->setDataSpaceOverride(true);
+                dst->data_space = static_cast<android_dataspace_t>(HAL_DATASPACE_BT2020_ITU_PQ);
+            }
         }
 
         if (dst->stream_type == CAMERA_STREAM_INPUT) {
