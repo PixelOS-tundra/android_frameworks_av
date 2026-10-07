@@ -1210,22 +1210,25 @@ status_t HidlCamera3Device::HidlHalInterface::configureStreams(
             dst->format = overrideFormat;
             dst->data_space = overrideDataSpace;
 
-            // QTI HALs produce HDR10 (PQ) video for 10-bit encoder streams, but the
-            // encoder surface defaults to BT.2020 SDR, so the recording gets tagged
-            // with the wrong transfer. Tag such streams as BT.2020 PQ instead.
+            // The encoder input surface defaults to BT.2020 with the SDR transfer for
+            // 4K when the recorder does not set color aspects, which does not match what
+            // QTI HALs produce. Tag the stream with what the HAL actually outputs:
+            // HDR10 (PQ) for 10-bit streams, BT.709 like smaller sizes otherwise.
             static constexpr uint64_t kUsageVideoEncoder = 1ULL << 16;
             static constexpr uint64_t kUsageQtiPrivate10Bit = 1ULL << 30;
             const uint64_t usage = requestedConfiguration3_2.streams[i].usage;
-            if (dst->stream_type == CAMERA_STREAM_OUTPUT &&
-                    (usage & kUsageVideoEncoder) && (usage & kUsageQtiPrivate10Bit) &&
+            if (dst->stream_type == CAMERA_STREAM_OUTPUT && (usage & kUsageVideoEncoder) &&
                     (dst->data_space & HAL_DATASPACE_STANDARD_MASK) ==
                             HAL_DATASPACE_STANDARD_BT2020 &&
                     (dst->data_space & HAL_DATASPACE_TRANSFER_MASK) ==
                             HAL_DATASPACE_TRANSFER_SMPTE_170M) {
-                ALOGI("%s: Stream %d: tagging 10-bit video stream as BT2020 PQ", __FUNCTION__,
-                        streamId);
+                const bool is10Bit = usage & kUsageQtiPrivate10Bit;
+                ALOGI("%s: Stream %d: tagging %s video stream as %s", __FUNCTION__, streamId,
+                        is10Bit ? "10-bit" : "8-bit", is10Bit ? "BT2020 PQ" : "BT709");
                 dstStream->setDataSpaceOverride(true);
-                dst->data_space = static_cast<android_dataspace_t>(HAL_DATASPACE_BT2020_ITU_PQ);
+                dst->data_space = is10Bit ?
+                        static_cast<android_dataspace_t>(HAL_DATASPACE_BT2020_ITU_PQ) :
+                        HAL_DATASPACE_V0_BT709;
             }
         }
 
