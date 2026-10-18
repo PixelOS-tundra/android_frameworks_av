@@ -3035,6 +3035,22 @@ status_t AudioPolicyManager::stopSource(const sp<SwAudioOutputDescriptor>& outpu
                 }
             }
             reopenOutputsWithDevices(outputsToReopen);
+
+            // While voice call is active, other volume sources are capped by the voice call volume
+            // (see computeVolume()). Once the last voice call client stops, e.g. a VoIP app's call
+            // end tone played after leaving MODE_IN_COMMUNICATION, re-apply the volumes on all
+            // active outputs, including this one, as nothing else does when their routing does
+            // not change.
+            if (clientVolSrc == toVolumeSource(AUDIO_STREAM_VOICE_CALL, false) &&
+                    !mOutputs.isActiveLocally(clientVolSrc)) {
+                for (size_t i = 0; i < mOutputs.size(); i++) {
+                    sp<SwAudioOutputDescriptor> desc = mOutputs.valueAt(i);
+                    if (desc->isActive()) {
+                        applyStreamVolumes(desc, desc->devices().types(), delayMs);
+                    }
+                }
+            }
+
             // update the outputs if stopping one with a stream that can affect notification routing
             handleNotificationRoutingForStream(stream, clientUid);
         }
